@@ -1,9 +1,9 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { ErrorCode } from '@uniz-org/shared/dist/errors/error-codes';
+import { ErrorCode } from '../shared/error-codes';
 import { OutpassRequestSchema, OutingRequestSchema, ApprovalLogEntrySchema, ApprovalLogEntry } from '@uniz-org/shared';
-import { UserRole } from '@uniz-org/shared/dist/auth/roles.enum';
+import { UserRole } from '../shared/roles.enum';
 
 const prisma = new PrismaClient();
 

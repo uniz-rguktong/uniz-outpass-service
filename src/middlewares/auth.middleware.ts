@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
-import { JwtPayload, JwtPayloadSchema } from '@uniz-org/shared/dist/auth/jwt.schema';
-import { ErrorCode } from '@uniz-org/shared/dist/errors/error-codes';
+import { JwtPayload, JwtPayloadSchema } from '../shared/jwt.schema';
+import { ErrorCode } from '../shared/error-codes';
 
 const SECRET = process.env.JWT_SECURITY_KEY || 'default_secret_unsafe';
 

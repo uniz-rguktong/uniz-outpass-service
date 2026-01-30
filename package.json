@@ -19,7 +19,6 @@
     "zod": "^3.23.8",
     "jsonwebtoken": "^9.0.2",
     "@prisma/client": "^5.19.1",
-    "@uniz-org/shared": "file:../uniz-shared"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
