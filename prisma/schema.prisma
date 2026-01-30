@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Outpass {
+  id            String   @id @default(uuid())
+  studentId     String   // Reference to User ID
+  reason        String
+  fromDay       DateTime
+  toDay         DateTime
+  days          Int      @default(0)
+  requestedTime DateTime @default(now())
+  
+  isExpired     Boolean  @default(false)
+  isApproved    Boolean  @default(false)
+  isRejected    Boolean  @default(false)
+  
+  issuedBy      String   @default("none")
+  issuedTime    DateTime @default(now())
+  message       String?
+  rejectedBy    String   @default("none")
+  rejectedTime  DateTime @default(now())
+  inTime        DateTime @default(now())
+  
+  currentLevel  String   @default("caretaker")
+  approvalLogs  Json?    // Typed as ApprovalLogsSchema in code
+
+  @@index([studentId])
+  @@index([isApproved, isRejected, isExpired])
+}
+
+model Outing {
+  id            String   @id @default(uuid())
+  studentId     String   // Reference to User ID
+  reason        String
+  fromTime      DateTime
+  toTime        DateTime
+  hours         Int      @default(0)
+  requestedTime DateTime @default(now())
+  
+  isExpired     Boolean  @default(false)
+  isApproved    Boolean  @default(false)
+  isRejected    Boolean  @default(false)
+  
+  issuedBy      String   @default("none")
+  issuedTime    DateTime @default(now())
+  message       String?
+  rejectedBy    String   @default("none")
+  rejectedTime  DateTime @default(now())
+  inTime        DateTime @default(now())
+  
+  currentLevel  String   @default("caretaker")
+  approvalLogs  Json?
+
+  @@index([studentId])
+  @@index([isApproved, isRejected, isExpired])
+}
