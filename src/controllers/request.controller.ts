@@ -70,12 +70,58 @@ export const getHistory = async (req: AuthenticatedRequest, res: Response) => {
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
 
+    const targetId = req.params.id || user.id || user.username;
+    const { page = 1, limit = 10 } = req.query;
+
     try {
-        const [outpasses, outings] = await Promise.all([
-            prisma.outpass.findMany({ where: { studentId: user.id || user.username }, orderBy: { requestedTime: 'desc' } }),
-            prisma.outing.findMany({ where: { studentId: user.id || user.username }, orderBy: { requestedTime: 'desc' } })
+        const skip = (Number(page) - 1) * Number(limit);
+        
+        // Fetch both and combine. In a real system you might want a unified view/table if scale is huge.
+        const [outpasses, outings, totalOutpasses, totalOutings] = await Promise.all([
+            prisma.outpass.findMany({ 
+                where: { studentId: targetId }, 
+                orderBy: { requestedTime: 'desc' },
+                take: Number(limit)
+            }),
+            prisma.outing.findMany({ 
+                where: { studentId: targetId }, 
+                orderBy: { requestedTime: 'desc' },
+                take: Number(limit)
+            }),
+            prisma.outpass.count({ where: { studentId: targetId } }),
+            prisma.outing.count({ where: { studentId: targetId } })
         ]);
-        return res.json({ success: true, data: { outpasses, outings } });
+
+        // Merge and sort
+        const combined = [
+            ...outpasses.map(o => ({ ...o, type: 'outpass' })),
+            ...outings.map(o => ({ ...o, type: 'outing' }))
+        ].sort((a, b) => new Date(b.requestedTime).getTime() - new Date(a.requestedTime).getTime())
+         .slice(0, Number(limit));
+
+        // Format keys for frontend compatibility
+        const history = combined.map(item => ({
+            _id: item.id,
+            ...item,
+            is_approved: item.isApproved,
+            is_rejected: item.isRejected,
+            is_expired: item.isExpired,
+            requested_time: item.requestedTime,
+            from_time: (item as any).fromTime,
+            to_time: (item as any).toTime,
+            from_day: (item as any).fromDay,
+            to_day: (item as any).toDay
+        }));
+
+        return res.json({ 
+            success: true, 
+            history,
+            pagination: {
+                page: Number(page),
+                totalPages: Math.ceil((totalOutpasses + totalOutings) / Number(limit)),
+                total: totalOutpasses + totalOutings
+            }
+        });
     } catch (e) {
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
     }
@@ -160,6 +206,46 @@ export const rejectOutpass = async (req: AuthenticatedRequest, res: Response) =>
             }
         });
          return res.json({ success: true, data: updated });
+    } catch (e) {
+        return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
+    }
+};
+
+export const getAllOutings = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const outings = await prisma.outing.findMany({ orderBy: { requestedTime: 'desc' } });
+        const mapped = outings.map(o => ({
+            _id: o.id,
+            ...o,
+            username: o.studentId, // frontend expects username/studentId
+            is_approved: o.isApproved,
+            is_rejected: o.isRejected,
+            is_expired: o.isExpired,
+            requested_time: o.requestedTime,
+            from_time: o.fromTime,
+            to_time: o.toTime
+        }));
+        return res.json({ success: true, outings: mapped });
+    } catch (e) {
+        return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
+    }
+};
+
+export const getAllOutpasses = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const outpasses = await prisma.outpass.findMany({ orderBy: { requestedTime: 'desc' } });
+        const mapped = outpasses.map(o => ({
+            _id: o.id,
+            ...o,
+            username: o.studentId,
+            is_approved: o.isApproved,
+            is_rejected: o.isRejected,
+            is_expired: o.isExpired,
+            requested_time: o.requestedTime,
+            from_day: o.fromDay,
+            to_day: o.toDay
+        }));
+        return res.json({ success: true, outpasses: mapped });
     } catch (e) {
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
     }
