@@ -3,7 +3,7 @@ import { ApprovalLogsSchema, ApprovalLogEntrySchema, ApprovalLogEntry } from './
 export { ApprovalLogsSchema, ApprovalLogEntrySchema, ApprovalLogEntry };
 
 export const OutpassRequestSchema = z.object({
-  userId: z.string(), // Student ID (UUID or Username)
+  userId: z.string().optional(), // Optional, extracted from JWT
   reason: z.string().min(3),
   fromDay: z.string().datetime(),
   toDay: z.string().datetime(),
@@ -31,7 +31,7 @@ export const OutpassResponseSchema = z.object({
 });
 
 export const OutingRequestSchema = z.object({
-  userId: z.string(),
+  userId: z.string().optional(),
   reason: z.string().min(3),
   fromTime: z.string().datetime(),
   toTime: z.string().datetime(),

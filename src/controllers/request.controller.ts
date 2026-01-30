@@ -25,14 +25,32 @@ export const createOutpass = async (req: AuthenticatedRequest, res: Response) =>
     const { reason, fromDay, toDay } = parse.data;
 
     try {
+        // Check for existing pending request
+        const existing = await prisma.outpass.findFirst({
+            where: {
+                studentId: user.id || user.username,
+                isApproved: false,
+                isRejected: false,
+                isExpired: false
+            }
+        });
+
+        if (existing) {
+            return res.status(409).json({ 
+                code: ErrorCode.RESOURCE_ALREADY_EXISTS, 
+                message: 'already in pending request' 
+            });
+        }
+
         const outpass = await prisma.outpass.create({
             data: {
                 studentId: user.id || user.username, 
-                studentGender: req.body.studentGender || 'M', // Expected from frontend or profile sync
+                studentGender: req.body.studentGender || 'M',
                 reason,
                 fromDay: new Date(fromDay),
                 toDay: new Date(toDay),
-                approvalLogs: []
+                approvalLogs: [],
+                currentLevel: 'caretaker'
             }
         });
         return res.json({ success: true, data: outpass });
@@ -138,7 +156,20 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
     const isSuper = superRoles.includes(user.role as UserRole);
 
     try {
-        const existing = await prisma.outpass.findUnique({ where: { id } });
+        // Optimize payload size by selecting only needed fields
+        const existing = await prisma.outpass.findUnique({ 
+            where: { id },
+            select: {
+                id: true,
+                isApproved: true,
+                isRejected: true,
+                isExpired: true,
+                studentGender: true,
+                currentLevel: true,
+                approvalLogs: true
+            }
+        });
+        
         if (!existing) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
         if (existing.isApproved || existing.isRejected || existing.isExpired) {
             return res.status(409).json({ code: ErrorCode.OUTPASS_ALREADY_APPROVED, message: 'Request already finalized' });
@@ -154,22 +185,41 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
           }
         }
 
+        const currentRole = user.role as string;
+        let nextLevel = existing.currentLevel;
+        let finalApproval = false;
+
+        // Multi-level flow logic
+        if (currentRole === UserRole.CARETAKER_MALE || currentRole === UserRole.CARETAKER_FEMALE) {
+            nextLevel = 'warden';
+        } else if (currentRole === UserRole.WARDEN_MALE || currentRole === UserRole.WARDEN_FEMALE) {
+            nextLevel = 'swo';
+        } else if (superRoles.includes(user.role as UserRole)) {
+            finalApproval = true;
+        }
+
         const logEntry: ApprovalLogEntry = {
-            level: (user.role as string),
+            level: currentRole,
             approverId: user.id || user.username,
             status: 'approved',
             timestamp: new Date().toISOString(),
             comment: req.body.comment
         };
 
+        const updateData: any = {
+            currentLevel: nextLevel,
+            approvalLogs: appendLog(existing.approvalLogs, logEntry)
+        };
+
+        if (finalApproval) {
+            updateData.isApproved = true;
+            updateData.issuedBy = user.username;
+            updateData.issuedTime = new Date();
+        }
+
         const updated = await prisma.outpass.update({
             where: { id },
-            data: {
-                isApproved: true,
-                issuedBy: user.username,
-                issuedTime: new Date(),
-                approvalLogs: appendLog(existing.approvalLogs, logEntry)
-            }
+            data: updateData
         });
         
         return res.json({ success: true, data: updated });
