@@ -17,7 +17,7 @@ app.get('/health', (req, res) => {
 });
 
 import requestRoutes from './routes/request.routes';
-app.use('/requests', requestRoutes);
+app.use('/', requestRoutes);
 
 app.listen(PORT, () => {
   console.log(`Outpass Service running on port ${PORT}`);
