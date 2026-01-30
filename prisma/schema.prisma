@@ -11,6 +11,7 @@ datasource db {
 model Outpass {
   id            String   @id @default(uuid())
   studentId     String   // Reference to User ID
+  studentGender String   @default("M") // Added for gender-based filtering
   reason        String
   fromDay       DateTime
   toDay         DateTime
@@ -38,6 +39,7 @@ model Outpass {
 model Outing {
   id            String   @id @default(uuid())
   studentId     String   // Reference to User ID
+  studentGender String   @default("M") // Added for gender-based filtering
   reason        String
   fromTime      DateTime
   toTime        DateTime

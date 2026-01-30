@@ -27,7 +27,8 @@ export const createOutpass = async (req: AuthenticatedRequest, res: Response) =>
     try {
         const outpass = await prisma.outpass.create({
             data: {
-                studentId: user.id || user.username, // Fallback purely for this phase transition
+                studentId: user.id || user.username, 
+                studentGender: req.body.studentGender || 'M', // Expected from frontend or profile sync
                 reason,
                 fromDay: new Date(fromDay),
                 toDay: new Date(toDay),
@@ -54,6 +55,7 @@ export const createOuting = async (req: AuthenticatedRequest, res: Response) => 
         const outing = await prisma.outing.create({
             data: {
                 studentId: user.id || user.username,
+                studentGender: req.body.studentGender || 'M',
                 reason,
                 fromTime: new Date(fromTime),
                 toTime: new Date(toTime),
@@ -132,18 +134,24 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
 
-    // Role check logic (simplified for phase 3: any admin can approve)
-    // In real world: check level vs role (Caretaker -> Warden).
-    if (user.role === UserRole.STUDENT) {
-        return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN });
-    }
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const isSuper = superRoles.includes(user.role as UserRole);
 
     try {
-        // Optimistic Locking: Only approve if not already finalized
         const existing = await prisma.outpass.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
         if (existing.isApproved || existing.isRejected || existing.isExpired) {
             return res.status(409).json({ code: ErrorCode.OUTPASS_ALREADY_APPROVED, message: 'Request already finalized' });
+        }
+
+        // Gender restriction check
+        if (!isSuper) {
+          if ((user.role === UserRole.CARETAKER_FEMALE || user.role === UserRole.WARDEN_FEMALE) && existing.studentGender !== 'F') {
+              return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN, message: 'Female staff can only approve female requests' });
+          }
+          if ((user.role === UserRole.CARETAKER_MALE || user.role === UserRole.WARDEN_MALE) && existing.studentGender !== 'M') {
+              return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN, message: 'Male staff can only approve male requests' });
+          }
         }
 
         const logEntry: ApprovalLogEntry = {
@@ -155,17 +163,11 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
         };
 
         const updated = await prisma.outpass.update({
-            where: { id, isApproved: false, isRejected: false }, // Double check in query
+            where: { id },
             data: {
-                // Logic: If Warden, set isApproved=true. If Caretaker, just log?
-                // For Phase 3, let's assume single-step approval for simplicity or strictly follow "currentLevel" logic?
-                // The DB has "currentLevel".
-                // Let's implement full flow: Caretaker -> Warden -> Security?
-                // Legacy logic implies multiple steps.
-                // Strict rule: "Approval order must be respected".
-                // We'll keep it simple: If Warden, approve fully. If Caretaker, maybe just log?
-                // For now, setting approved=true for any admin to satisfy "Auth flow works" requirement.
                 isApproved: true,
+                issuedBy: user.username,
+                issuedTime: new Date(),
                 approvalLogs: appendLog(existing.approvalLogs, logEntry)
             }
         });
@@ -175,6 +177,7 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
     }
 };
+
 
 export const rejectOutpass = async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
@@ -212,8 +215,35 @@ export const rejectOutpass = async (req: AuthenticatedRequest, res: Response) =>
 };
 
 export const getAllOutings = async (req: AuthenticatedRequest, res: Response) => {
+    const user = req.user;
+    if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
+
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const isSuper = superRoles.includes(user.role as UserRole);
+
+    let where: any = {};
+    
+    // 1. Role-based status filtering for Security
+    if (user.role === UserRole.SECURITY) {
+        where.isApproved = true;
+        where.isExpired = false;
+        where.isRejected = false;
+    }
+
+    // 2. Gender-based filtering for Hostel Staff
+    if (!isSuper && user.role !== UserRole.SECURITY) {
+        if (user.role === UserRole.CARETAKER_FEMALE || user.role === UserRole.WARDEN_FEMALE) {
+            where.studentGender = 'F';
+        } else if (user.role === UserRole.CARETAKER_MALE || user.role === UserRole.WARDEN_MALE) {
+            where.studentGender = 'M';
+        }
+    }
+
     try {
-        const outings = await prisma.outing.findMany({ orderBy: { requestedTime: 'desc' } });
+        const outings = await prisma.outing.findMany({ 
+            where,
+            orderBy: { requestedTime: 'desc' } 
+        });
         const mapped = outings.map(o => ({
             _id: o.id,
             ...o,
@@ -232,8 +262,35 @@ export const getAllOutings = async (req: AuthenticatedRequest, res: Response) =>
 };
 
 export const getAllOutpasses = async (req: AuthenticatedRequest, res: Response) => {
+    const user = req.user;
+    if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
+
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const isSuper = superRoles.includes(user.role as UserRole);
+
+    let where: any = {};
+
+    // 1. Role-based status filtering for Security
+    if (user.role === UserRole.SECURITY) {
+        where.isApproved = true;
+        where.isExpired = false;
+        where.isRejected = false;
+    }
+
+    // 2. Gender-based filtering for Hostel Staff
+    if (!isSuper && user.role !== UserRole.SECURITY) {
+        if (user.role === UserRole.CARETAKER_FEMALE || user.role === UserRole.WARDEN_FEMALE) {
+            where.studentGender = 'F';
+        } else if (user.role === UserRole.CARETAKER_MALE || user.role === UserRole.WARDEN_MALE) {
+            where.studentGender = 'M';
+        }
+    }
+
     try {
-        const outpasses = await prisma.outpass.findMany({ orderBy: { requestedTime: 'desc' } });
+        const outpasses = await prisma.outpass.findMany({ 
+            where,
+            orderBy: { requestedTime: 'desc' } 
+        });
         const mapped = outpasses.map(o => ({
             _id: o.id,
             ...o,
@@ -250,3 +307,5 @@ export const getAllOutpasses = async (req: AuthenticatedRequest, res: Response) 
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
     }
 };
+
+
