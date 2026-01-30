@@ -134,7 +134,7 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
 
-    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO, UserRole.DEAN];
     const isSuper = superRoles.includes(user.role as UserRole);
 
     try {
@@ -218,7 +218,7 @@ export const getAllOutings = async (req: AuthenticatedRequest, res: Response) =>
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
 
-    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO, UserRole.DEAN];
     const isSuper = superRoles.includes(user.role as UserRole);
 
     let where: any = {};
@@ -265,7 +265,7 @@ export const getAllOutpasses = async (req: AuthenticatedRequest, res: Response) 
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
 
-    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO];
+    const superRoles = [UserRole.DIRECTOR, UserRole.WEBMASTER, UserRole.SWO, UserRole.DEAN];
     const isSuper = superRoles.includes(user.role as UserRole);
 
     let where: any = {};
