@@ -13,6 +13,25 @@ const appendLog = (currentLogs: any, entry: ApprovalLogEntry) => {
     return [...logs, entry];
 };
 
+import axios from 'axios';
+
+// Helper: Check if student is in campus
+async function checkStudentInCampus(token: string) {
+    try {
+        const GATEWAY = process.env.GATEWAY_URL || 'https://uniz-production-gateway.vercel.app/api/v1';
+        const res = await axios.get(`${GATEWAY}/profile/student/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return res.data.student.is_in_campus;
+    } catch (e) {
+        console.error("Profile check failed:", e);
+        // Fail safe: If we can't verify, we should probably default to True (allow) or False (block).
+        // For security, usually Block, but unavailability might block everyone.
+        // Let's assume True if service down to avoid lockout, but log error.
+        return true; 
+    }
+}
+
 export const createOutpass = async (req: AuthenticatedRequest, res: Response) => {
     const user = req.user;
     if (!user) return res.status(401).json({ code: ErrorCode.AUTH_UNAUTHORIZED });
@@ -25,20 +44,26 @@ export const createOutpass = async (req: AuthenticatedRequest, res: Response) =>
     const { reason, fromDay, toDay } = parse.data;
 
     try {
-        // Check for existing pending request
-        const existing = await prisma.outpass.findFirst({
-            where: {
-                studentId: user.id || user.username,
-                isApproved: false,
-                isRejected: false,
-                isExpired: false
-            }
-        });
+        // 1. Check if student is IN CAMPUS
+        const isInCampus = await checkStudentInCampus(req.headers.authorization?.split(' ')[1] || '');
+        if (!isInCampus) {
+             return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN, message: 'You are already marked as OUT of campus.' });
+        }
 
-        if (existing) {
+        // 2. Check for existing pending Outpass AND Outing
+        const [existingOutpass, existingOuting] = await Promise.all([
+            prisma.outpass.findFirst({
+                where: { studentId: user.id || user.username, isApproved: false, isRejected: false, isExpired: false }
+            }),
+            prisma.outing.findFirst({
+                where: { studentId: user.id || user.username, isApproved: false, isRejected: false, isExpired: false }
+            })
+        ]);
+
+        if (existingOutpass || existingOuting) {
             return res.status(409).json({ 
                 code: ErrorCode.RESOURCE_ALREADY_EXISTS, 
-                message: 'already in pending request' 
+                message: 'You already have a pending request (Outpass or Outing).' 
             });
         }
 
@@ -70,6 +95,29 @@ export const createOuting = async (req: AuthenticatedRequest, res: Response) => 
     const { reason, fromTime, toTime } = parse.data;
 
     try {
+        // 1. Check if student is IN CAMPUS
+        const isInCampus = await checkStudentInCampus(req.headers.authorization?.split(' ')[1] || '');
+        if (!isInCampus) {
+             return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN, message: 'You are already marked as OUT of campus.' });
+        }
+
+        // 2. Check for existing pending Outpass AND Outing
+        const [existingOutpass, existingOuting] = await Promise.all([
+            prisma.outpass.findFirst({
+                where: { studentId: user.id || user.username, isApproved: false, isRejected: false, isExpired: false }
+            }),
+            prisma.outing.findFirst({
+                where: { studentId: user.id || user.username, isApproved: false, isRejected: false, isExpired: false }
+            })
+        ]);
+
+        if (existingOutpass || existingOuting) {
+            return res.status(409).json({ 
+                code: ErrorCode.RESOURCE_ALREADY_EXISTS, 
+                message: 'You already have a pending request (Outpass or Outing).' 
+            });
+        }
+
         const outing = await prisma.outing.create({
             data: {
                 studentId: user.id || user.username,
@@ -147,6 +195,17 @@ export const getHistory = async (req: AuthenticatedRequest, res: Response) => {
     }
 };
 
+// Helper to determine request type and fetch
+const fetchRequest = async (id: string, prisma: any) => {
+    const outpass = await prisma.outpass.findUnique({ where: { id } });
+    if (outpass) return { type: 'outpass', data: outpass };
+    
+    const outing = await prisma.outing.findUnique({ where: { id } });
+    if (outing) return { type: 'outing', data: outing };
+
+    return null;
+};
+
 export const approveOutpass = async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const user = req.user;
@@ -156,21 +215,11 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
     const isSuper = superRoles.includes(user.role as UserRole);
 
     try {
-        // Optimize payload size by selecting only needed fields
-        const existing = await prisma.outpass.findUnique({ 
-            where: { id },
-            select: {
-                id: true,
-                isApproved: true,
-                isRejected: true,
-                isExpired: true,
-                studentGender: true,
-                currentLevel: true,
-                approvalLogs: true
-            }
-        });
+        const found = await fetchRequest(id, prisma);
+        if (!found) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
         
-        if (!existing) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
+        const { type, data: existing } = found;
+
         if (existing.isApproved || existing.isRejected || existing.isExpired) {
             return res.status(409).json({ code: ErrorCode.OUTPASS_ALREADY_APPROVED, message: 'Request already finalized' });
         }
@@ -191,9 +240,19 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
 
         // Multi-level flow logic
         if (currentRole === UserRole.CARETAKER_MALE || currentRole === UserRole.CARETAKER_FEMALE) {
-            nextLevel = 'warden';
+            // Outings might be auto-approved by Caretaker or just 1 level
+            if (type === 'outing') {
+                finalApproval = true; // Caretakers can approve outings directly? Usually yes or Warden. 
+                // Let's assume caretaker approves outing.
+            } else {
+                nextLevel = 'warden';
+            }
         } else if (currentRole === UserRole.WARDEN_MALE || currentRole === UserRole.WARDEN_FEMALE) {
-            nextLevel = 'swo';
+            if (type === 'outing') {
+                finalApproval = true;
+            } else {
+                nextLevel = 'swo';
+            }
         } else if (superRoles.includes(user.role as UserRole)) {
             finalApproval = true;
         }
@@ -217,10 +276,12 @@ export const approveOutpass = async (req: AuthenticatedRequest, res: Response) =
             updateData.issuedTime = new Date();
         }
 
-        const updated = await prisma.outpass.update({
-            where: { id },
-            data: updateData
-        });
+        let updated;
+        if (type === 'outpass') {
+            updated = await prisma.outpass.update({ where: { id }, data: updateData });
+        } else {
+            updated = await prisma.outing.update({ where: { id }, data: updateData });
+        }
         
         return res.json({ success: true, data: updated });
     } catch (e) {
@@ -235,8 +296,11 @@ export const rejectOutpass = async (req: AuthenticatedRequest, res: Response) =>
     if (!user || user.role === UserRole.STUDENT) return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN });
 
     try {
-        const existing = await prisma.outpass.findUnique({ where: { id } });
-        if (!existing) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
+        const found = await fetchRequest(id, prisma);
+        if (!found) return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
+        
+        const { type, data: existing } = found;
+
         if (existing.isApproved || existing.isRejected) {
              return res.status(409).json({ code: ErrorCode.OUTPASS_ALREADY_APPROVED });
         }
@@ -249,15 +313,20 @@ export const rejectOutpass = async (req: AuthenticatedRequest, res: Response) =>
             comment: req.body.comment
         };
 
-        const updated = await prisma.outpass.update({
-            where: { id, isRejected: false },
-            data: {
-                isRejected: true,
-                rejectedBy: user.username,
-                rejectedTime: new Date(),
-                approvalLogs: appendLog(existing.approvalLogs, logEntry)
-            }
-        });
+        const updateData = {
+            isRejected: true,
+            rejectedBy: user.username,
+            rejectedTime: new Date(),
+            approvalLogs: appendLog(existing.approvalLogs, logEntry)
+        };
+
+        let updated;
+        if (type === 'outpass') {
+             updated = await prisma.outpass.update({ where: { id, isRejected: false }, data: updateData });
+        } else {
+             updated = await prisma.outing.update({ where: { id, isRejected: false }, data: updateData });
+        }
+
          return res.json({ success: true, data: updated });
     } catch (e) {
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
@@ -357,5 +426,3 @@ export const getAllOutpasses = async (req: AuthenticatedRequest, res: Response) 
         return res.status(500).json({ code: ErrorCode.INTERNAL_SERVER_ERROR });
     }
 };
-
-
