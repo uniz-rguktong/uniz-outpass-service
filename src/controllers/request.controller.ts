@@ -24,13 +24,18 @@ import axios from "axios";
 // Helper to trigger notifications via Mail Service
 const sendMail = async (type: string, to: string, data: any) => {
   try {
-    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
-    const SECRET = process.env.INTERNAL_SECRET;
-    if (!SECRET && process.env.NODE_ENV === "production")
-      throw new Error("INTERNAL_SECRET missing");
+    const rawGateway = (
+      process.env.GATEWAY_URL || "http://localhost:3000/api/v1"
+    ).trim();
+    const rawMailUrl = process.env.MAIL_SERVICE_URL;
+    const MAIL_SERVICE = rawMailUrl
+      ? rawMailUrl.trim().replace(/\/health$/, "")
+      : `${rawGateway}/mail`;
+
+    const SECRET = (process.env.INTERNAL_SECRET || "uniz-core").trim();
 
     await axios.post(
-      `${GATEWAY}/mail/send`,
+      `${MAIL_SERVICE}/send`,
       {
         type,
         to,
@@ -124,7 +129,9 @@ const sendAdminConfirmation = async (
 
 async function getStudentStatus(token: string) {
   try {
-    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
+    const GATEWAY = (
+      process.env.GATEWAY_URL || "http://localhost:3000/api/v1"
+    ).trim();
     const res = await axios.get(`${GATEWAY}/profile/student/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -145,7 +152,9 @@ async function updateStudentProfileStatus(
   status: { isPresent?: boolean; isPending?: boolean },
 ) {
   try {
-    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
+    const GATEWAY = (
+      process.env.GATEWAY_URL || "http://localhost:3000/api/v1"
+    ).trim();
     await axios.put(
       `${GATEWAY}/profile/student/status`,
       {
