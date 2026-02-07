@@ -935,13 +935,16 @@ export const getAllOutpasses = async (
     where.studentId = { contains: search as string, mode: "insensitive" };
   }
 
-  // 1. Role-based status filtering for Security
+  // 1. Role-based status filtering
+  // Security sees APPROVED requests (for check-out operations)
+  // All other roles see PENDING requests only (not approved, not rejected, not expired)
   if (user.role === UserRole.SECURITY) {
     where.isApproved = true;
     where.isExpired = false;
     where.isRejected = false;
   } else {
-    // Requirement: Return only PENDING requests
+    // STRICT: Only pending requests for approval workflow
+    // Never return approved outpasses to Caretakers/Wardens/Admins
     where.isApproved = false;
     where.isRejected = false;
     where.isExpired = false;
