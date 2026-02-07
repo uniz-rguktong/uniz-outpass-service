@@ -585,7 +585,11 @@ export const approveOutpass = async (
     }
 
     const currentRole = user.role as string;
-    const requestedAction = req.body.action || "approve"; // Default to approve if hitting this endpoint
+    // Auto-detect forward action from URL path (e.g., /requests/:id/forward)
+    const isForwardEndpoint = req.originalUrl.endsWith("/forward");
+    const requestedAction = isForwardEndpoint
+      ? "forward"
+      : req.body.action || "approve";
 
     // --- STRICT HIERARCHY ENFORCEMENT ---
     if (
