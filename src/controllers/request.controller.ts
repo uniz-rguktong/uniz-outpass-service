@@ -1004,42 +1004,89 @@ export const getSecuritySummary = async (
     return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN });
   }
 
-  const { search = "" } = req.query;
-  const where: any = {
+  const { search = "", limit = 50, page = 1 } = req.query;
+  const limitNum = Number(limit);
+  const skip = (Number(page) - 1) * limitNum;
+
+  // 1. Pending Actions (For Dashboard)
+  // Fetch requests that are Approved but NOT yet Checked In (Cycle incomplete)
+  const pendingWhere: any = {
     isApproved: true,
-    isExpired: false,
     isRejected: false,
+    isExpired: false,
+    checkedInTime: null,
+    studentId: search
+      ? { contains: search as string, mode: "insensitive" }
+      : undefined,
+  };
+
+  // 2. History (Completed) - Paginated
+  const historyWhere: any = {
+    checkedInTime: { not: null },
     studentId: search
       ? { contains: search as string, mode: "insensitive" }
       : undefined,
   };
 
   try {
-    // Fetch both with basic pagination (limit 100 for summary)
-    const [outings, outpasses] = await Promise.all([
-      prisma.outing.findMany({
-        where,
-        take: 100,
-        orderBy: { requestedTime: "desc" },
-      }),
-      prisma.outpass.findMany({
-        where,
-        take: 100,
-        orderBy: { requestedTime: "desc" },
-      }),
-    ]);
+    const [pendingOutings, pendingOutpasses, historyOutings, historyOutpasses] =
+      await Promise.all([
+        prisma.outing.findMany({
+          where: pendingWhere,
+          orderBy: { requestedTime: "desc" },
+          take: 500,
+        }),
+        prisma.outpass.findMany({
+          where: pendingWhere,
+          orderBy: { requestedTime: "desc" },
+          take: 500,
+        }),
+        prisma.outing.findMany({
+          where: historyWhere,
+          orderBy: { checkedInTime: "desc" },
+          take: limitNum,
+          skip,
+        }),
+        prisma.outpass.findMany({
+          where: historyWhere,
+          orderBy: { checkedInTime: "desc" },
+          take: limitNum,
+          skip,
+        }),
+      ]);
 
-    const combined = [
-      ...outings.map((o: any) => ({ ...o, type: "outing" })),
-      ...outpasses.map((o: any) => ({ ...o, type: "outpass" })),
-    ];
+    const mapType = (list: any[], type: string) =>
+      list.map((o) => ({ ...o, type }));
+
+    const pending = [
+      ...mapType(pendingOutings, "outing"),
+      ...mapType(pendingOutpasses, "outpass"),
+    ].sort(
+      (a, b) =>
+        new Date(b.requestedTime).getTime() -
+        new Date(a.requestedTime).getTime(),
+    );
+
+    const history = [
+      ...mapType(historyOutings, "outing"),
+      ...mapType(historyOutpasses, "outpass"),
+    ]
+      .sort(
+        (a, b) =>
+          new Date(b.checkedInTime).getTime() -
+          new Date(a.checkedInTime).getTime(),
+      )
+      .slice(0, limitNum);
 
     return res.json({
       success: true,
-      pending_checkout: combined.filter((r) => !r.checkedOutTime),
-      pending_checkin: combined.filter(
-        (r) => r.checkedOutTime && !r.checkedInTime,
-      ),
+      pending_checkout: pending.filter((r) => !r.checkedOutTime),
+      pending_checkin: pending.filter((r) => r.checkedOutTime),
+      history,
+      pagination: {
+        page: Number(page),
+        limit: limitNum,
+      },
     });
   } catch (e) {
     return res.status(500).json({
