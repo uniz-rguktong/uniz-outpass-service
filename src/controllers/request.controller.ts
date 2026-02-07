@@ -215,12 +215,10 @@ export const createOutpass = async (
     );
 
     if (!isInCampus) {
-      return res
-        .status(403)
-        .json({
-          code: ErrorCode.AUTH_FORBIDDEN,
-          message: "You are already marked as OUT of campus.",
-        });
+      return res.status(403).json({
+        code: ErrorCode.AUTH_FORBIDDEN,
+        message: "You are already marked as OUT of campus.",
+      });
     }
 
     if (hasPending) {
@@ -301,13 +299,11 @@ export const createOutpass = async (
     return res.json({ success: true, data: outpass });
   } catch (e: any) {
     console.error("Outpass Creation Error:", e);
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message:
-          "There was an issue submitting your outpass request. Please try again.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message:
+        "There was an issue submitting your outpass request. Please try again.",
+    });
   }
 };
 
@@ -362,12 +358,10 @@ export const createOuting = async (
     );
 
     if (!isInCampus) {
-      return res
-        .status(403)
-        .json({
-          code: ErrorCode.AUTH_FORBIDDEN,
-          message: "You are already marked as OUT of campus.",
-        });
+      return res.status(403).json({
+        code: ErrorCode.AUTH_FORBIDDEN,
+        message: "You are already marked as OUT of campus.",
+      });
     }
 
     if (hasPending) {
@@ -445,13 +439,11 @@ export const createOuting = async (
     return res.json({ success: true, data: outing });
   } catch (e: any) {
     console.error("Outing Creation Error:", e);
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message:
-          "There was an issue submitting your outing request. Please try again.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message:
+        "There was an issue submitting your outing request. Please try again.",
+    });
   }
 };
 
@@ -520,12 +512,10 @@ export const getHistory = async (req: AuthenticatedRequest, res: Response) => {
       },
     });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to retrieve your history. Please try again later.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to retrieve your history. Please try again later.",
+    });
   }
 };
 
@@ -564,12 +554,10 @@ export const approveOutpass = async (
     const { type, data: existing } = found;
 
     if (existing.isApproved || existing.isRejected || existing.isExpired) {
-      return res
-        .status(409)
-        .json({
-          code: ErrorCode.OUTPASS_ALREADY_APPROVED,
-          message: "Request already finalized",
-        });
+      return res.status(409).json({
+        code: ErrorCode.OUTPASS_ALREADY_APPROVED,
+        message: "Request already finalized",
+      });
     }
 
     // Gender restriction check
@@ -579,24 +567,20 @@ export const approveOutpass = async (
           user.role === UserRole.WARDEN_FEMALE) &&
         existing.studentGender !== "F"
       ) {
-        return res
-          .status(403)
-          .json({
-            code: ErrorCode.AUTH_FORBIDDEN,
-            message: "Female staff can only approve female requests",
-          });
+        return res.status(403).json({
+          code: ErrorCode.AUTH_FORBIDDEN,
+          message: "Female staff can only approve female requests",
+        });
       }
       if (
         (user.role === UserRole.CARETAKER_MALE ||
           user.role === UserRole.WARDEN_MALE) &&
         existing.studentGender !== "M"
       ) {
-        return res
-          .status(403)
-          .json({
-            code: ErrorCode.AUTH_FORBIDDEN,
-            message: "Male staff can only approve male requests",
-          });
+        return res.status(403).json({
+          code: ErrorCode.AUTH_FORBIDDEN,
+          message: "Male staff can only approve male requests",
+        });
       }
     }
 
@@ -716,12 +700,10 @@ export const approveOutpass = async (
 
     return res.json({ success: true, data: updated });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Unable to process approval. Please try again.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Unable to process approval. Please try again.",
+    });
   }
 };
 
@@ -733,6 +715,14 @@ export const rejectOutpass = async (
   const user = req.user;
   if (!user || user.role === UserRole.STUDENT)
     return res.status(403).json({ code: ErrorCode.AUTH_FORBIDDEN });
+
+  // Explicitly block Security from rejecting anything
+  if (user.role === UserRole.SECURITY) {
+    return res.status(403).json({
+      code: ErrorCode.AUTH_FORBIDDEN,
+      message: "Security role is limited to Check-In/Check-Out operations.",
+    });
+  }
 
   const currentRole = user.role as string;
 
@@ -830,12 +820,10 @@ export const rejectOutpass = async (
 
     return res.json({ success: true, data: updated });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Unable to process rejection. Please try again.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Unable to process rejection. Please try again.",
+    });
   }
 };
 
@@ -916,12 +904,10 @@ export const getAllOutings = async (
       pagination: { page: Number(page), limit: take },
     });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to fetch outing records.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to fetch outing records.",
+    });
   }
 };
 
@@ -1002,12 +988,10 @@ export const getAllOutpasses = async (
       pagination: { page: Number(page), limit: take },
     });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to fetch outpass records.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to fetch outpass records.",
+    });
   }
 };
 
@@ -1058,12 +1042,10 @@ export const getSecuritySummary = async (
       ),
     });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to generate security summary.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to generate security summary.",
+    });
   }
 };
 
@@ -1087,12 +1069,10 @@ export const securityCheckOut = async (
     const { type, data: existing } = found;
 
     if (!existing.isApproved || existing.isRejected || existing.isExpired) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Request is not valid for checkout (Must be Approved & Active)",
-        });
+      return res.status(400).json({
+        message:
+          "Request is not valid for checkout (Must be Approved & Active)",
+      });
     }
 
     // 1-Hour Expiration Rule Check
@@ -1124,11 +1104,9 @@ export const securityCheckOut = async (
         console.warn("Pending status clear failed on expiry");
       }
 
-      return res
-        .status(400)
-        .json({
-          message: "Approval expired (User did not check out within 1 hour)",
-        });
+      return res.status(400).json({
+        message: "Approval expired (User did not check out within 1 hour)",
+      });
     }
 
     // Proceed to Check Out - User is LEAVING campus
@@ -1158,12 +1136,10 @@ export const securityCheckOut = async (
 
     return res.json({ success: true, message: "Student Checked Out" });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to process checkout.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to process checkout.",
+    });
   }
 };
 
@@ -1183,6 +1159,18 @@ export const securityCheckIn = async (
     if (!found)
       return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
     const { type, data: existing } = found;
+
+    // Validate Check-in: Must be checked out, and not checked in already
+    if (!existing.checkedOutTime) {
+      return res.status(400).json({
+        message: "Check-in Denied: Student has not checked out yet.",
+      });
+    }
+    if (existing.checkedInTime) {
+      return res
+        .status(409)
+        .json({ message: "Check-in Denied: Student already checked in." });
+    }
 
     // Mark In Time
     const updateData = { checkedInTime: new Date() };
@@ -1211,11 +1199,9 @@ export const securityCheckIn = async (
 
     return res.json({ success: true, message: "Student Checked In" });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to process check-in.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to process check-in.",
+    });
   }
 };
