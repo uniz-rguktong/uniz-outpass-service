@@ -124,11 +124,7 @@ const sendAdminConfirmation = async (
 
 async function getStudentStatus(token: string) {
   try {
-    const GATEWAY =
-      process.env.GATEWAY_URL ||
-      (process.env.NODE_ENV === "production"
-        ? "https://uniz-gateway.vercel.app/api/v1"
-        : "http://localhost:3000/api/v1");
+    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
     const res = await axios.get(`${GATEWAY}/profile/student/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -149,11 +145,7 @@ async function updateStudentProfileStatus(
   status: { isPresent?: boolean; isPending?: boolean },
 ) {
   try {
-    const GATEWAY =
-      process.env.GATEWAY_URL ||
-      (process.env.NODE_ENV === "production"
-        ? "https://uniz-gateway.vercel.app/api/v1"
-        : "http://localhost:3000/api/v1");
+    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
     await axios.put(
       `${GATEWAY}/profile/student/status`,
       {

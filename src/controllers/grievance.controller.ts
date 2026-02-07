@@ -16,12 +16,10 @@ const GrievanceSchema = z.object({
 // Helper for sending mail
 const sendMail = async (type: string, to: string, data: any) => {
   try {
-    const GATEWAY =
-      process.env.GATEWAY_URL ||
-      (process.env.NODE_ENV === "production"
-        ? "https://uniz-gateway.vercel.app/api/v1"
-        : "http://localhost:3000/api/v1");
-    const SECRET = process.env.INTERNAL_SECRET || "uniz-core";
+    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
+    const SECRET = process.env.INTERNAL_SECRET;
+    if (!SECRET && process.env.NODE_ENV === "production")
+      throw new Error("INTERNAL_SECRET missing");
 
     await axios.post(
       `${GATEWAY}/mail/send`,
@@ -84,13 +82,11 @@ export const submitGrievance = async (
     });
   } catch (e: any) {
     console.error("Grievance Submit Error:", e);
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message:
-          "We were unable to submit your grievance. Please try again later.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message:
+        "We were unable to submit your grievance. Please try again later.",
+    });
   }
 };
 
@@ -111,11 +107,9 @@ export const getGrievances = async (
     });
     return res.json({ success: true, data: grievances });
   } catch (e) {
-    return res
-      .status(500)
-      .json({
-        code: ErrorCode.INTERNAL_SERVER_ERROR,
-        message: "Failed to retrieve grievances.",
-      });
+    return res.status(500).json({
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      message: "Failed to retrieve grievances.",
+    });
   }
 };
