@@ -1068,6 +1068,13 @@ export const securityCheckOut = async (
       return res.status(404).json({ code: ErrorCode.RESOURCE_NOT_FOUND });
     const { type, data: existing } = found;
 
+    // Prevent double check-out
+    if (existing.checkedOutTime) {
+      return res.status(409).json({
+        message: "Checkout Denied: Student already checked out.",
+      });
+    }
+
     if (!existing.isApproved || existing.isRejected || existing.isExpired) {
       return res.status(400).json({
         message:
