@@ -24,12 +24,10 @@ import axios from "axios";
 // Helper to trigger notifications via Mail Service
 const sendMail = async (type: string, to: string, data: any) => {
   try {
-    const GATEWAY =
-      process.env.GATEWAY_URL ||
-      (process.env.NODE_ENV === "production"
-        ? "https://uniz-gateway.vercel.app/api/v1"
-        : "http://localhost:3000/api/v1");
-    const SECRET = process.env.INTERNAL_SECRET || "uniz-core";
+    const GATEWAY = process.env.GATEWAY_URL || "http://localhost:3000/api/v1";
+    const SECRET = process.env.INTERNAL_SECRET;
+    if (!SECRET && process.env.NODE_ENV === "production")
+      throw new Error("INTERNAL_SECRET missing");
 
     await axios.post(
       `${GATEWAY}/mail/send`,
