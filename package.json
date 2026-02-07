@@ -13,7 +13,8 @@
     "postinstall": "if [ -f prisma/schema.prisma ]; then npx prisma generate; fi",
     "seed": "ts-node prisma/seed.ts",
     "data-reset": "npx prisma migrate reset --force --skip-seed && npx prisma migrate dev --name init_schema && npm run seed",
-    "deploy": "git add . && git commit -m \"deploy: outpass-service updates\" && git push origin main"
+    "deploy": "git add . && git commit -m \"deploy: outpass-service updates\" && git push origin main",
+    "redeploy": "bash redeploy.sh"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
